@@ -9,47 +9,35 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.AulaTeste.errors.UsuarioJaExiste;
 import com.example.AulaTeste.model.UserModel;
-import com.example.AulaTeste.repository.IUserRepository;
-import com.example.AulaTeste.repository.UsuarioRepository;
+import com.example.AulaTeste.service.UsuarioService;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-
 
 @RestController
 @RequestMapping("/usuarios")
 public class UsuarioController {
 
     @Autowired
-    private UsuarioRepository usuarioRepository;
-    @Autowired
-    private IUserRepository usuarioRepositoryData;
+    private UsuarioService usuarioService;
 
     @PostMapping("/criar")
-    public ResponseEntity criarUsuario(@RequestBody UserModel UserModel) {
-        var user = this.usuarioRepositoryData.findByEmail(UserModel.getEmail());
-        
-        // Caso não encontre um usuário ele retorna na requisição BAD_REQUEST
-        if (user != null){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Usuário já existe");
+    public ResponseEntity<?> criarUsuario(@RequestBody UserModel userModel) {
+        try {
+            var user = usuarioService.criarUsuario(userModel);
+            return ResponseEntity.status(HttpStatus.CREATED).body(user);
+        } catch (UsuarioJaExiste e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
-        usuarioRepository.adicionarUsuario(UserModel);
-        var userCreated = this.usuarioRepositoryData.save(UserModel);
-        return ResponseEntity.status(HttpStatus.CREATED).body(userCreated);
-
     }
- 
+
     @GetMapping("/todos")
-    public List<UserModel> listarUsuarios() {
-        return usuarioRepository.listarUsuarios();
-        
-    }
-
-    @GetMapping("/todos2")
     public ResponseEntity<List<UserModel>> getAllUsers() {
-        List<UserModel> users = usuarioRepositoryData.findAll();
+        var users = usuarioService.listarUsuarios();
         if (users.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         }
@@ -58,21 +46,25 @@ public class UsuarioController {
 
     @GetMapping("/buscar")
     public ResponseEntity<UserModel> getUser(@RequestParam String email) {
-        var user = usuarioRepositoryData.findByEmail(email);
+        var user = usuarioService.buscarPorEmail(email);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         }
-        return ResponseEntity.ok().body(user);
+        return ResponseEntity.ok(user);
     }
 
-
     @PostMapping("/login")
-    public String login(@RequestBody UserModel UserModel) {
-        UserModel autenticado = usuarioRepository.autenticar(UserModel.getEmail(), UserModel.getSenha());
-        if (autenticado != null) {
-            return "Login realizado com sucesso!";
-        } else {
-            return "Email ou senha incorretos!";
+    public ResponseEntity<?> login(@RequestBody UserModel userModel) {
+        boolean autenticado = usuarioService.autenticar(userModel.getEmail(), userModel.getSenha());
+        if (autenticado) {
+            return ResponseEntity.ok("Autenticação bem-sucedida");
         }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuário ou senha incorreta");
+    }
+
+    @DeleteMapping("/deletar")
+    public ResponseEntity<Void> deletUser(@RequestParam String email) {
+        usuarioService.deletarPorEmail(email);
+        return ResponseEntity.ok().build();
     }
 }
